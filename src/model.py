@@ -22,6 +22,10 @@ class PPO:
         batch_rtgs = []     # batch rewards-to-go
         batch_lens = []     # episodic lengths in batch
 
+    def evaluate(self, batch_obs):
+        V = self.critic(batch_obs).squeeze()
+        return V
+
     def learn(self, total_timesteps):
         t_so_far = 0
         while t_so_far < total_timesteps:
