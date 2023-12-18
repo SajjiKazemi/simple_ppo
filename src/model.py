@@ -1,4 +1,6 @@
 import torch
+import torch.nn as nn
+import numpy as np
 from nn import NN
 
 class PPO:
@@ -10,9 +12,22 @@ class PPO:
         self.critic = NN(self.obs_dim, 1)
         self._initi_hyperparameters()
 
+        # Initialize actor optimizer
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
+
+        # Initialize critic optimizer
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
+
+        # Create covariance matrix for get_action
+        self.cov_var = torch.full(size=(self.act_dim,), fill_value=0.5)
+        self.cov_mat = torch.diag(self.cov_var)
+
     def _init_hyperparameters(self):
         self.timesteps_per_batch = 4800
         self.max_timesteps_per_episode = 1600
+        self.n_updates_per_iteration = 5
+        self.clip = 0.2     # Recommended by the paper
+        self.lr = 0.005
     
     def rollout(self):
         batch_obs = []      # batch observations
@@ -35,6 +50,9 @@ class PPO:
             #step 3 of the algorithm
             batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens = self.rollout()
 
+            #Increment timesteps ran this batch so far
+            t_so_far += np.sum(batch_lens)
+
             #Calculate V_{phi, k}
             V, _ = self.evaluate(batch_obs, batch_acts)
 
@@ -43,6 +61,30 @@ class PPO:
 
             #Normalize advantages
             A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
-            
-            
+
+            for _ in range(self.n_updates_per_iteration):
+                #Calculate pi_theta(a_t | s_t)
+                V, curr_log_probs = self.evaluate(batch_obs, batch_acts)
+
+                #Calculate the ratio pi_theta(a_t | s_t) / pi_theta_k(a_t | s_t)
+                ratios = torch.exp(curr_log_probs - batch_log_probs)
+
+                #Calculate surrogate losses
+                surr1 = ratios * A_k
+                surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip) * A_k
+
+                #Calculate actor and critic losses
+                actor_loss = (-torch.min(surr1, surr2)).mean()
+                critic_loss = nn.MSELoss()(V, batch_rtgs)
+
+                # Calculate gradients and perform backward propagation for actor network
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                self.actor_optimizer.step()
+
+                # Calculate gradients and perform backward propagation for critic network
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic_optimizer.step()
+
     
