@@ -22,12 +22,27 @@ class PPO:
         batch_rtgs = []     # batch rewards-to-go
         batch_lens = []     # episodic lengths in batch
 
-    def evaluate(self, batch_obs):
+    def evaluate(self, batch_obs, batch_acts):
         V = self.critic(batch_obs).squeeze()
-        return V
+        mean = self.actor(batch_obs)
+        dist = torch.distributions.MultivariateNormal(mean, self.cov_mat)
+        log_probs = dist.log_prob(batch_acts)
+        return V, log_probs
 
     def learn(self, total_timesteps):
         t_so_far = 0
         while t_so_far < total_timesteps:
+            #step 3 of the algorithm
+            batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens = self.rollout()
+
+            #Calculate V_{phi, k}
+            V, _ = self.evaluate(batch_obs, batch_acts)
+
+            #step 5 of the algorithm, calculate advantage
+            A_k = batch_rtgs - V.detach()
+
+            #Normalize advantages
+            A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
+            
             
     
