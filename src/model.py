@@ -28,6 +28,7 @@ class PPO:
         self.n_updates_per_iteration = 5
         self.clip = 0.2     # Recommended by the paper
         self.lr = 0.005
+        self.gamma = 0.95
     
     def rollout(self):
         batch_obs = []      # batch observations
@@ -100,6 +101,21 @@ class PPO:
 
         # Return the sampled action and the log prob of that action
         return action.detach().numpy(), log_prob.detach()
+    
+    def compute_rtgs(self, batch_rews):
+        batch_rtgs = []
+
+        # Iterate through each episode
+        for ep_rews in reversed(batch_rews):
+
+            discounted_reward = 0
+            for rew in reversed(ep_rews):
+                discounted_reward = rew + discounted_reward * self.gamma
+                batch_rtgs.insert(0, discounted_reward)
+            
+        # Convert rewards-to-go into a tensor
+        batch_rtgs = torch.tensor(batch_rtgs, dtype=torch.float)
+        return batch_rtgs
 
     def learn(self, total_timesteps):
         t_so_far = 0
