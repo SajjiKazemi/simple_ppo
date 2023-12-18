@@ -10,7 +10,7 @@ class PPO:
         self.act_dim = env.action_space.shape[0]
         self.actor = NN(self.obs_dim, self.act_dim)
         self.critic = NN(self.obs_dim, 1)
-        self._initi_hyperparameters()
+        self._init_hyperparameters()
 
         # Initialize actor optimizer
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
@@ -37,12 +37,69 @@ class PPO:
         batch_rtgs = []     # batch rewards-to-go
         batch_lens = []     # episodic lengths in batch
 
+        # Number of timesteps run so far this batch
+        t = 0
+        while t < self.timesteps_per_batch:
+
+            # Reward this episode
+            ep_rews = []
+
+            obs = self.env.reset()
+            done = False
+
+            # Keep going until we have enough timesteps in this batch
+            for ep_t in range(self.max_timesteps_per_episode):
+
+                # Increment timesteps ran this batch so far
+                t += 1
+
+                # Collect observation
+                batch_obs.append(obs)
+                action, log_prob = self.get_action(obs)
+                obs, rew, done, _ = self.env.step(action)
+
+                # Collect reward, action, and log prob
+                ep_rews.append(rew)
+                batch_acts.append(action)
+                batch_log_probs.append(log_prob)
+
+                if done:
+                    break
+            
+            # Collect episodic length and rewards
+            batch_lens.append(ep_t + 1)     # plus 1 because timestep starts at 0
+            batch_rews.append(ep_rews)
+
+        # Reshape data as tensors in the shape specified before returning
+        batch_obs = torch.tensor(batch_obs, dtype=torch.float)
+        batch_acts = torch.tensor(batch_acts, dtype=torch.float)
+        batch_log_probs = torch.tensor(batch_log_probs, dtype=torch.float)
+
+        # Compute rewards-to-go as the 4th step of the algorithm
+        batch_rtgs = self.compute_rtgs(batch_rews)
+
+        # Return the data
+        return batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens
+
     def evaluate(self, batch_obs, batch_acts):
         V = self.critic(batch_obs).squeeze()
         mean = self.actor(batch_obs)
         dist = torch.distributions.MultivariateNormal(mean, self.cov_mat)
         log_probs = dist.log_prob(batch_acts)
         return V, log_probs
+
+    def get_action(self, obs):
+        mean = self.actor(obs)
+        
+        # Create the multivariate normal distribution
+        dist = torch.distributions.MultivariateNormal(mean, self.cov_mat)
+
+        # Sample an action from the distribution and get its log prob
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+
+        # Return the sampled action and the log prob of that action
+        return action.detach().numpy(), log_prob.detach()
 
     def learn(self, total_timesteps):
         t_so_far = 0
@@ -86,5 +143,3 @@ class PPO:
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic_optimizer.step()
-
-    
