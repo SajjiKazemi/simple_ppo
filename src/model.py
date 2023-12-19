@@ -159,7 +159,24 @@ class PPO:
         return batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens
 
     def evaluate(self, batch_obs, batch_acts):
+        """Estimate the values of each observation, and the log probs of
+           each action in the most recent batch with the most recent
+           parameters of the actor critic network. Should be called
+           from learn.
+
+        Args:
+            batch_obs (torch.tensor): the observations from the most recently collected batch
+            as a tensor. Shape: (number of timesteps in batch, dimension of observation)
+            batch_acts (torch.tensor): the actions from the most recently collected batch
+            as a tensor. Shape: (number of timesteps in batch, dimension of action)
+
+        Returns:
+            V (torch.tensor): the predictd values of batch_obs
+            log_probs (torch.tensor): the log probabilities of the actions taken in batch_acts given batch_obs
+        """
+        # Query critic network for a value V for each batch_obs. Shape of V should be same as batch_rtgs
         V = self.critic(batch_obs).squeeze()
+        
         mean = self.actor(batch_obs)
         dist = torch.distributions.MultivariateNormal(mean, self.cov_mat)
         log_probs = dist.log_prob(batch_acts)
