@@ -5,12 +5,13 @@ from nn import NN
 
 class PPO:
     def __init__(self, env) -> None:
+        self._init_hyperparameters()
         self.env = env
         self.obs_dim = env.observation_space.shape[0]
         self.act_dim = env.action_space.shape[0]
+
         self.actor = NN(self.obs_dim, self.act_dim)
         self.critic = NN(self.obs_dim, 1)
-        self._init_hyperparameters()
 
         # Initialize actor optimizer
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
@@ -45,7 +46,7 @@ class PPO:
             # Reward this episode
             ep_rews = []
 
-            obs = self.env.reset()
+            obs = self.env.reset()[0]
             done = False
 
             # Keep going until we have enough timesteps in this batch
@@ -57,7 +58,7 @@ class PPO:
                 # Collect observation
                 batch_obs.append(obs)
                 action, log_prob = self.get_action(obs)
-                obs, rew, done, _ = self.env.step(action)
+                obs, rew, done, terminated, truncated = self.env.step(action)
 
                 # Collect reward, action, and log prob
                 ep_rews.append(rew)
@@ -159,3 +160,11 @@ class PPO:
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic_optimizer.step()
+
+
+
+
+import gymnasium as gym
+env = gym.make('Pendulum-v1')
+model = PPO(env)
+model.learn(100000)
