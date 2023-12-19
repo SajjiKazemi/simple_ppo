@@ -1,11 +1,31 @@
+import gymnasium as gym
+
 import torch
 import torch.nn as nn
 import numpy as np
 from nn import NN
 
+
 class PPO:
-    def __init__(self, env) -> None:
-        self._init_hyperparameters()
+    """
+    This a base implementation for Proximal Policy Optimization (PPO) algorithm.
+    """
+
+    def __init__(self, policy_class, env, **hyperparameters) -> None:
+        """
+        Initializes PPO algorithm, using the hyperparameters provided.
+
+        Parameters:
+            policy_class: The class of the policy network for our actor/critic networks.
+            env: The environment to train on.
+            hyperparameters: The hyperparameters for training (timesteps_per_batch, gamma, etc).
+        """
+        #Making sure the environment is compatible with our code
+        assert(type(env.observation_space) == gym.spaces.Box)
+        assert(type(env.action_space) == gym.spaces.Box)
+
+        # Initialize hyperparameters
+        self._init_hyperparameters(hyperparameters)
         self.env = env
         self.obs_dim = env.observation_space.shape[0]
         self.act_dim = env.action_space.shape[0]
@@ -14,23 +34,52 @@ class PPO:
         self.critic = NN(self.obs_dim, 1)
 
         # Initialize actor optimizer
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr)
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(), lr=self.lr)
 
         # Initialize critic optimizer
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.lr)
+        self.critic_optimizer = torch.optim.Adam(
+            self.critic.parameters(), lr=self.lr)
 
         # Create covariance matrix for get_action
         self.cov_var = torch.full(size=(self.act_dim,), fill_value=0.5)
         self.cov_mat = torch.diag(self.cov_var)
 
-    def _init_hyperparameters(self):
-        self.timesteps_per_batch = 4800
-        self.max_timesteps_per_episode = 1600
-        self.n_updates_per_iteration = 5
+    def _init_hyperparameters(self, hyperparameters):
+        """
+        Initializes default hyperparameters.
+
+        Parameters:
+            hyperparameters: Dictionary of hyperparameters to initialize.
+
+        Returns:
+            None
+        """
+        # Initialize default values for hyperparameters
+        self.timesteps_per_batch = 4800     # timesteps per batch
+        self.max_timesteps_per_episode = 1600       # max timesteps per episode
+        self.n_updates_per_iteration = 5        # number of times to update actor/critic per iteration
         self.clip = 0.2     # Recommended by the paper
-        self.lr = 0.005
-        self.gamma = 0.95
-    
+        self.lr = 0.005     
+        self.gamma = 0.95   # Discount factor to be applied when calculating Rewards-To-Go
+
+        # Miscellaneous parameters
+        self.render = True     # If we should render during rollout
+        self.render_every_i = 50       # Only render every n iterations
+        self.save_freq = 10    # How often we save in number of iterations
+        self.seed = None       # Sets the seed of our program, used for reproducibility of results
+
+        # Update values for hyperparameters that were provided
+        for param, val in hyperparameters.items():
+            exec('self.' + param + ' = ' + str(val))
+
+        # Sets the seed if specified
+        if self.seed != None:
+            # Check if our seed is valid first
+            assert(type(self.seed) == int)
+            torch.manual_seed(self.seed)
+            print(f"Successfully set seed to {self.seed}", flush=True)
+
     def rollout(self):
         batch_obs = []      # batch observations
         batch_acts = []     # batch actions
@@ -67,9 +116,10 @@ class PPO:
 
                 if done:
                     break
-            
+
             # Collect episodic length and rewards
-            batch_lens.append(ep_t + 1)     # plus 1 because timestep starts at 0
+            # plus 1 because timestep starts at 0
+            batch_lens.append(ep_t + 1)
             batch_rews.append(ep_rews)
 
         # Reshape data as tensors in the shape specified before returning
@@ -92,7 +142,7 @@ class PPO:
 
     def get_action(self, obs):
         mean = self.actor(obs)
-        
+
         # Create the multivariate normal distribution
         dist = torch.distributions.MultivariateNormal(mean, self.cov_mat)
 
@@ -102,7 +152,7 @@ class PPO:
 
         # Return the sampled action and the log prob of that action
         return action.detach().numpy(), log_prob.detach()
-    
+
     def compute_rtgs(self, batch_rews):
         batch_rtgs = []
 
@@ -113,7 +163,7 @@ class PPO:
             for rew in reversed(ep_rews):
                 discounted_reward = rew + discounted_reward * self.gamma
                 batch_rtgs.insert(0, discounted_reward)
-            
+
         # Convert rewards-to-go into a tensor
         batch_rtgs = torch.tensor(batch_rtgs, dtype=torch.float)
         return batch_rtgs
@@ -121,33 +171,33 @@ class PPO:
     def learn(self, total_timesteps):
         t_so_far = 0
         while t_so_far < total_timesteps:
-            #step 3 of the algorithm
+            # step 3 of the algorithm
             batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens = self.rollout()
 
-            #Increment timesteps ran this batch so far
+            # Increment timesteps ran this batch so far
             t_so_far += np.sum(batch_lens)
 
-            #Calculate V_{phi, k}
+            # Calculate V_{phi, k}
             V, _ = self.evaluate(batch_obs, batch_acts)
 
-            #step 5 of the algorithm, calculate advantage
+            # step 5 of the algorithm, calculate advantage
             A_k = batch_rtgs - V.detach()
 
-            #Normalize advantages
+            # Normalize advantages
             A_k = (A_k - A_k.mean()) / (A_k.std() + 1e-10)
 
             for _ in range(self.n_updates_per_iteration):
-                #Calculate pi_theta(a_t | s_t)
+                # Calculate pi_theta(a_t | s_t)
                 V, curr_log_probs = self.evaluate(batch_obs, batch_acts)
 
-                #Calculate the ratio pi_theta(a_t | s_t) / pi_theta_k(a_t | s_t)
+                # Calculate the ratio pi_theta(a_t | s_t) / pi_theta_k(a_t | s_t)
                 ratios = torch.exp(curr_log_probs - batch_log_probs)
 
-                #Calculate surrogate losses
+                # Calculate surrogate losses
                 surr1 = ratios * A_k
                 surr2 = torch.clamp(ratios, 1 - self.clip, 1 + self.clip) * A_k
 
-                #Calculate actor and critic losses
+                # Calculate actor and critic losses
                 actor_loss = (-torch.min(surr1, surr2)).mean()
                 critic_loss = nn.MSELoss()(V, batch_rtgs)
 
@@ -160,11 +210,3 @@ class PPO:
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic_optimizer.step()
-
-
-
-
-import gymnasium as gym
-env = gym.make('Pendulum-v1')
-model = PPO(env)
-model.learn(100000)
