@@ -91,6 +91,16 @@ class PPO:
             print(f"Successfully set seed to {self.seed}", flush=True)
 
     def rollout(self):
+        """Saving the data from running the environment into a batch.
+
+        Returns:
+            batch_obs: the observations collected this batch. Shape: (number of timesteps, dimension of observation)
+            batch_acts: the actions collected this batch. Shape: (number of timesteps, dimension of action)
+            batch_log_probs: the log probabilities of actions taken this batch. Shape: (number of timesteps)
+            batch_rtgs: the Rewards-To-Go of each timestep in this batch. Shape: (number of timesteps)
+            batch_lens: the lengths of each episode this batch. Shape: (number of episodes)
+            batch_rews: the rewards received by the agent for each episode this batch. Shape: (number of episodes)
+        """
         batch_obs = []      # batch observations
         batch_acts = []     # batch actions
         batch_log_probs = []        # log probs of each action
@@ -110,6 +120,8 @@ class PPO:
 
             # Keep going until we have enough timesteps in this batch
             for ep_t in range(self.max_timesteps_per_episode):
+                if self.render and (self.logger['i_so_far'] % self.render_every_i == 0) and len(batch_lens) == 0:
+                    self.env.render()
 
                 # Increment timesteps ran this batch so far
                 t += 1
@@ -140,7 +152,10 @@ class PPO:
         # Compute rewards-to-go as the 4th step of the algorithm
         batch_rtgs = self.compute_rtgs(batch_rews)
 
-        # Return the data
+        # Log the episodic returns and episodic lengths in this batch.
+        self.logger['batch_rews'] = batch_rews
+        self.logger['batch_lens'] = batch_lens
+
         return batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens
 
     def evaluate(self, batch_obs, batch_acts):
