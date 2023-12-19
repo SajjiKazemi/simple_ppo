@@ -179,6 +179,14 @@ class PPO:
         return action.detach().numpy(), log_prob.detach()
 
     def compute_rtgs(self, batch_rews):
+        """Computes the Rewards-To-Go of each timestep in a batch given the rewards.
+
+        Args:
+            batch_rews (list): the rewards in a batch, Shape: (number of episodes, number of timesteps per episode)
+
+        Returns:
+            batch_rtgs (list): the rewards-to-go in a batch, Shape: (number of timesteps in batch)
+        """
         batch_rtgs = []
 
         # Iterate through each episode
