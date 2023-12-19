@@ -13,13 +13,12 @@ class PPO:
     """
 
     def __init__(self, policy_class, env, **hyperparameters) -> None:
-        """
-        Initializes PPO algorithm, using the hyperparameters provided.
+        """Initializes PPO algorithm, using the hyperparameters provided.
 
-        Parameters:
-            policy_class: The class of the policy network for our actor/critic networks.
-            env: The environment to train on.
-            hyperparameters: The hyperparameters for training (timesteps_per_batch, gamma, etc).
+        Args:
+            policy_class(torch.nn): The class of the policy network for our actor/critic networks.
+            env(gym env): The environment to train on.
+            hyperparameters(Dict): The hyperparameters for training (timesteps_per_batch, gamma, etc).
         """
         #Making sure the environment is compatible with our code
         assert(type(env.observation_space) == gym.spaces.Box)
@@ -58,16 +57,13 @@ class PPO:
             'batch_rews': [],       # episodic returns in batch
             'actor_losses': [],     # losses of actor network in current iteration
         }
-
+ 
     def _init_hyperparameters(self, hyperparameters):
-        """
-        Initializes default hyperparameters.
+        """ Initializes default hyperparameters.
 
-        Parameters:
-            hyperparameters: Dictionary of hyperparameters to initialize.
+        Args:
+            hyperparameters(Dict): Dictionary of hyperparameters to initialize.
 
-        Returns:
-            None
         """
         # Initialize default values for hyperparameters
         self.timesteps_per_batch = 4800     # timesteps per batch
@@ -183,7 +179,15 @@ class PPO:
         return batch_rtgs
 
     def learn(self, total_timesteps):
+        """The main core of the PPO method, where the actor and critic are trained.
+
+        Args:
+            total_timesteps (int): the total number of timesteps
+        """
+        print(f"Beginning training with {total_timesteps} timesteps.", flush=True)
+        print(f"and {self.timesteps_per_batch} timesteps per batch.", flush=True)
         t_so_far = 0
+        i_so_far = 0
         while t_so_far < total_timesteps:
             # step 3 of the algorithm
             batch_obs, batch_acts, batch_log_probs, batch_rews, batch_rtgs, batch_lens = self.rollout()
@@ -191,9 +195,15 @@ class PPO:
             # Increment timesteps ran this batch so far
             t_so_far += np.sum(batch_lens)
 
+            # Increment the number of iterations
+            i_so_far += 1
+
+            # Logging timesteps so far and iterations so far
+            self.logger['t_so_far'] = t_so_far
+            self.logger['i_so_far'] = i_so_far
+
             # Calculate V_{phi, k}
             V, _ = self.evaluate(batch_obs, batch_acts)
-
             # step 5 of the algorithm, calculate advantage
             A_k = batch_rtgs - V.detach()
 
@@ -224,6 +234,17 @@ class PPO:
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic_optimizer.step()
+
+                # Log actor loss
+                self.logger['actor_losses'].append(actor_loss.detach())
+            
+            # Print the summary stats
+            self._log_summary()
+
+            # Save our model if it's time
+            if i_so_far % self.save_freq == 0:
+                torch.save(self.actor.state_dict(), f"ppo_actor.pth")
+                torch.save(self.critic.state_dict(), f"ppo_critic.pth")
 
     def _log_summary(self):
         """
