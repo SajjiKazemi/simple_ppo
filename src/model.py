@@ -1,4 +1,5 @@
 import gymnasium as gym
+import time
 
 import torch
 import torch.nn as nn
@@ -26,12 +27,15 @@ class PPO:
 
         # Initialize hyperparameters
         self._init_hyperparameters(hyperparameters)
+
+        # Define and set the environment
         self.env = env
         self.obs_dim = env.observation_space.shape[0]
         self.act_dim = env.action_space.shape[0]
 
-        self.actor = NN(self.obs_dim, self.act_dim)
-        self.critic = NN(self.obs_dim, 1)
+        # Define actor and critic networks
+        self.actor = policy_class(self.obs_dim, self.act_dim)
+        self.critic = policy_class(self.obs_dim, 1)
 
         # Initialize actor optimizer
         self.actor_optimizer = torch.optim.Adam(
@@ -44,6 +48,16 @@ class PPO:
         # Create covariance matrix for get_action
         self.cov_var = torch.full(size=(self.act_dim,), fill_value=0.5)
         self.cov_mat = torch.diag(self.cov_var)
+
+        # Set a logger method to print summaries of each iteration
+        self.logger = {
+            'delta_t': time.time_ns(),
+            't_so_far': 0,
+            'i_so_far': 0,
+            'batch_lens': [],       # episodic lengths in batch
+            'batch_rews': [],       # episodic returns in batch
+            'actor_losses': [],     # losses of actor network in current iteration
+        }
 
     def _init_hyperparameters(self, hyperparameters):
         """
@@ -210,3 +224,38 @@ class PPO:
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic_optimizer.step()
+
+    def _log_summary(self):
+        """
+        Prints a summary of training so far.
+        """
+        delta_t = self.logger['delta_t']
+        self.logger['delta_t'] = time.time_ns()
+        delta_t = (self.logger['delta_t'] - delta_t) / 1e9
+        delta_t = str(round(delta_t, 2))
+
+        t_so_far = self.logger['t_so_far']
+        i_so_far = self.logger['i_so_far']
+        avg_ep_lens = np.mean(self.logger['batch_lens'])
+        avg_ep_rews = np.mean([np.sum(ep_rews) for ep_rews in self.logger['batch_rews']])
+        avg_actor_loss = np.mean([losses.float().mean() for losses in self.logger['actor_losses']])
+
+        avg_ep_lens = str(round(avg_ep_lens, 2))
+        avg_ep_rews = str(round(avg_ep_rews, 2))
+        avg_actor_loss = str(round(avg_actor_loss, 5))
+
+        print(flush=True)
+        print(f"-------------------- Iteration #{i_so_far} --------------------", flush=True)
+        print(f"Average Episodic Length: {avg_ep_lens}", flush=True)
+        print(f"Average Episodic Return: {avg_ep_rews}", flush=True)
+        print(f"Average Loss: {avg_actor_loss}", flush=True)
+        print(f"Timesteps So Far: {t_so_far}", flush=True)
+        print(f"Iteration took: {delta_t} secs", flush=True)
+        print(f"------------------------------------------------------", flush=True)
+        print(flush=True)
+
+        # Reset batch-specific logging data
+        self.logger['batch_lens'] = []
+        self.logger['batch_rews'] = []
+        self.logger['actor_losses'] = []
+
