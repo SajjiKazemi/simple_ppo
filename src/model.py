@@ -166,6 +166,15 @@ class PPO:
         return V, log_probs
 
     def get_action(self, obs):
+        """Queries an action from the actor network, should be called from rollout.
+
+        Args:
+            obs (torch.tensor): the observation at the current timestep
+
+        Returns:
+            action (narray): the action to take, as a numpy array
+            log_prob (narray): the log probability of the selected action in the distribution
+        """
         mean = self.actor(obs)
 
         # Create the multivariate normal distribution
