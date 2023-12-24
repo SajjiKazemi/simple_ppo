@@ -62,7 +62,7 @@ def main(args):
         'render_every_i': 10
     }
 
-    env = gym.make('Pendulum-v1')
+    env = gym.make('Pendulum-v1', render_mode='human')
     if args.mode == 'train':
         train(env, hyperparameters, args.actor_model, args.critic_model)
     else:
