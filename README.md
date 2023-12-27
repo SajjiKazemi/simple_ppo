@@ -1,4 +1,4 @@
-# Simple PPO Implementation
+# A Simple Implementation of the Proximal Policy Optimization (PPO) Method
 
 ## Overview
 
