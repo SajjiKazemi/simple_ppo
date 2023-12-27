@@ -34,7 +34,7 @@ def train(env, hyperparameters ,actor_model, critic_model):
     else:
         print(f"Training from scratch.", flush=True)
     
-    model.learn(total_timesteps=2000)
+    model.learn(total_timesteps=20000)
 
 def test(env, actor_model):
     print(f"Testing", flush=True)
@@ -62,7 +62,7 @@ def main(args):
         'render_every_i': 10
     }
 
-    env = gym.make('Pendulum-v1', render_mode='human')
+    env = gym.make('Pendulum-v1', render_mode=args.render_mode)
     if args.mode == 'train':
         train(env, hyperparameters, args.actor_model, args.critic_model)
     else:
