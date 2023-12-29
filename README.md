@@ -2,7 +2,10 @@
 
 ## Overview
 
-This repository provides a basic implementation of the Proximal Policy Optimization (PPO) method from scratch. The implementation is based on the tutorial available at [Coding PPO from Scratch with PyTorch](https://medium.com/analytics-vidhya/coding-ppo-from-scratch-with-pytorch-part-1-4-613dfc1b14c8). The project focuses on using the Pendulum environment from the Atari games series. For more information about the Pendulum environment, refer to [this link](https://www.gymlibrary.dev/environments/classic_control/pendulum/).
+This repository provides a basic implementation of the Proximal Policy Optimization (PPO) method from scratch. The implementation is based on the tutorial available at [Coding PPO from Scratch with PyTorch](https://medium.com/analytics-vidhya/coding-ppo-from-scratch-with-pytorch-part-1-4-613dfc1b14c8). The project focuses on using the Pendulum environment from the Atari games series. For more information about the Pendulum environment, refer to [this link](https://www.gymlibrary.dev/environments/classic_control/pendulum/). An example from the utilized environment can be seen as follows.
+
+<img src="env.png" alt="Screenshot" width="400">
+
 
 ## Getting Started
 
